@@ -11,21 +11,37 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from datetime import timedelta
+import re
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env(
+    DEBUG=bool,
+    SECRET_KEY=str,
+
+    DATABASE_NAME_DICTIONARY_API=str,
+    DATABASES_USER_DICTIONARY_API=str,
+    DATABASES_PASSWORD_DICTIONARY_API=str,
+    DATABASE_HOST_DICTIONARY_API=str,
+    DATABASE_PORT_DICTIONARY_API=(int, 5436),
+)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-2!vcahi_7hbbf0poo(d7#xwi6citr!phnkb5!mc8_!x^7r)5#_'
+SECRET_KEY = env('SECRET_KEY')
+JWT_SECRET_KEY = SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # (!) в продакшене указать конкретные домены
+# ALLOWED_HOSTS = ['custom_auth.localhost', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -37,6 +53,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'rest_framework',
+    'corsheaders',
+    'debug_toolbar',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'django_filters',
+
+    'dictionary_service'
+
 ]
 
 MIDDLEWARE = [
@@ -47,6 +73,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'corsheaders.middleware.CorsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
+
 ]
 
 ROOT_URLCONF = 'dictionary_api.urls'
@@ -70,17 +100,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dictionary_api.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    "default": {
+        "ENGINE": "django.db.backends.postgresql_psycopg2",
+        "NAME": env('DATABASE_NAME_DICTIONARY_API'),
+        "USER": env('DATABASES_USER_DICTIONARY_API'),
+        "PASSWORD": env('DATABASES_PASSWORD_DICTIONARY_API'),
+        "HOST": env('DATABASE_HOST_DICTIONARY_API'),
+        "PORT": env('DATABASE_PORT_DICTIONARY_API'),
+    },
 }
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        # 'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'dictionary_api.authentication.JWTAuthentication',
+    ),
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -100,7 +139,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
@@ -112,13 +150,111 @@ USE_I18N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+# Путь к папке для хранения медиафайлов
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+INTERNAL_IPS = [
+    '127.0.0.1',
+    'localhost',
+    'drunar.space',
+]
+
+# CORS settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Разрешить все источники
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+
+CORS_ALLOW_HEADERS = [
+    'Authorization',
+    'Content-Type',
+    'X-CSRFToken',
+    'Access-Control-Allow-Origin',
+]
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.drunar\.space$",
+]
+
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PATCH',
+    'PUT',
+    'DELETE',
+    'OPTIONS',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://drunar.space:3000",  # URL фронтенда
+
+    "http://auth.drunar.space",
+    "http://user.drunar.space",
+    "http://text.drunar.space",
+    "http://book.drunar.space",
+    "http://translator.drunar.space",
+    "http://dictionary.drunar.space",
+
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://drunar.space:3000",  # URL фронтенда
+
+    "http://auth.drunar.space",
+    "http://user.drunar.space",
+    "http://text.drunar.space",
+    "http://book.drunar.space",
+    "http://translator.drunar.space",
+    "http://dictionary.drunar.space",
+
+]
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} [{levelname}] {name}: {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',  # Формат времени
+        },
+        'simple': {
+            'format': '{levelname}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',  # Используем форматтер с временной меткой
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',  # Установите уровень логирования на DEBUG для вывода всех сообщений
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',  # Уровень логирования для Django
+            'propagate': False,
+        },
+        'dictionary_api': {  # имя приложения
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
