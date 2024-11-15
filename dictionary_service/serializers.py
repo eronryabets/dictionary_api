@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 from .models import Dictionary, Word, Tag
 
@@ -15,6 +16,7 @@ class WordSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False  # Сделать поле необязательным
     )
+    image_path = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Word
@@ -57,6 +59,7 @@ class WordSerializer(serializers.ModelSerializer):
 
 class DictionarySerializer(serializers.ModelSerializer):
     words = WordSerializer(many=True, read_only=True)
+    cover_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Dictionary
@@ -65,6 +68,7 @@ class DictionarySerializer(serializers.ModelSerializer):
             'user_id',
             'language',
             'name',
+            'cover_image',
             'words',
             'created_at',
             'updated_at',

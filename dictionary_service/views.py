@@ -18,7 +18,7 @@ class DictionaryViewSet(viewsets.ModelViewSet):
     Вьюсет для управления словарями.
     """
     serializer_class = DictionarySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwner]
+    permission_classes = [permissions.IsAuthenticated]  # IsOwner
 
     def get_queryset(self):
         return Dictionary.objects.filter(user_id=self.request.user.id)
