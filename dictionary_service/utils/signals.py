@@ -1,9 +1,10 @@
-
+from django.db import transaction
 from django.db.models.signals import pre_save, post_delete, post_save
 from django.dispatch import receiver
 from dictionary_service.models import Dictionary, Word
 import os
 from django.db.models import F
+from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,11 +58,27 @@ def delete_word_image_on_delete(sender, instance, **kwargs):
 @receiver(post_save, sender=Word)
 def increment_word_count(sender, instance, created, **kwargs):
     if created:
-        Dictionary.objects.filter(id=instance.dictionary.id).update(word_count=F('word_count') + 1)
-        logger.info(f"Word added to Dictionary {instance.dictionary.id}. Incremented word_count.")
+        with transaction.atomic():
+            Dictionary.objects.filter(id=instance.dictionary.id).update(
+                word_count=F('word_count') + 1,
+                updated_at=timezone.now()
+            )
+        logger.info(
+            f"Word added to Dictionary {instance.dictionary.id}. Incremented word_count and updated updated_at.")
 
 
 @receiver(post_delete, sender=Word)
 def decrement_word_count(sender, instance, **kwargs):
-    Dictionary.objects.filter(id=instance.dictionary.id).update(word_count=F('word_count') - 1)
-    logger.info(f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count.")
+    with transaction.atomic():
+        Dictionary.objects.filter(id=instance.dictionary.id).update(
+            word_count=F('word_count') - 1,
+            updated_at=timezone.now()
+        )
+        dictionary = Dictionary.objects.get(id=instance.dictionary.id)
+        if dictionary.word_count < 0:
+            dictionary.word_count = 0
+            dictionary.save()
+            logger.warning(f"word_count for Dictionary {dictionary.id} became negative. Reset to 0.")
+        else:
+            logger.info(
+                f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count and updated updated_at.")
