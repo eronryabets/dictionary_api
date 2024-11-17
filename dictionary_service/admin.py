@@ -1,3 +1,4 @@
+
 from django.contrib import admin
 from .models import Dictionary, Tag, Word
 from django.utils.html import format_html
@@ -5,12 +6,15 @@ from django.utils.html import format_html
 
 @admin.register(Dictionary)
 class DictionaryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user_id', 'language', 'name', 'cover_image_display', 'created_at', 'updated_at')
+    list_display = (
+    'id', 'user_id', 'language', 'name', 'word_count', 'cover_image_display', 'created_at', 'updated_at')
     list_filter = ('language', 'created_at')
     search_fields = ('id', 'user_id', 'language', 'name')
     ordering = ('-created_at',)
-    readonly_fields = ('id', 'created_at', 'updated_at', 'cover_image_display')
-    fields = ('user_id', 'language', 'name', 'cover_image', 'cover_image_display', 'created_at', 'updated_at')
+    readonly_fields = (
+    'id', 'created_at', 'updated_at', 'cover_image_display', 'word_count')  # word_count только для чтения
+    fields = (
+    'user_id', 'language', 'name', 'cover_image', 'cover_image_display', 'word_count', 'created_at', 'updated_at')
 
     def cover_image_display(self, obj):
         if obj.cover_image:

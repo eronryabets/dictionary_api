@@ -40,7 +40,8 @@ class JWTAuthentication(BaseAuthentication):
         return (user, None)
 
 
-class IsOwner(BasePermission):
-    def has_object_permission(self, request, view, obj):
-        # Проверяем, что текущий пользователь является владельцем объекта
-        return obj.user_id == request.user.id
+# .utils.permissions -> isOwner
+# class IsOwner(BasePermission):
+#     def has_object_permission(self, request, view, obj):
+#         # Проверяем, что текущий пользователь является владельцем объекта
+#         return obj.user_id == request.user.id

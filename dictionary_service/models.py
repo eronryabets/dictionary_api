@@ -18,12 +18,14 @@ def dictionary_cover_upload_to(instance, filename):
     Определяет путь для загрузки обложки словаря:
     media/users/user_id/dictionaries/dictionary_id/cover_filename.ext
     """
+    ext = os.path.splitext(filename)[1].lower()
+    filename = f"cover{ext}"  # Короткое имя файла
     return os.path.join(
         'users',
         str(instance.user_id),
         'dictionaries',
         str(instance.id),
-        f"cover_{filename}"
+        filename
     )
 
 
@@ -52,9 +54,10 @@ class Dictionary(models.Model):
         upload_to=dictionary_cover_upload_to,
         blank=True,
         null=True,
-        max_length=400,  # Увеличиваем длину пути
+        max_length=255,  # Увеличиваем длину пути
         validators=[validate_image_extension]
     )
+    word_count = models.PositiveIntegerField(default=0)  # Новое поле для счетчика слов
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -66,7 +69,12 @@ class Dictionary(models.Model):
         verbose_name = "Dictionary"
         verbose_name_plural = "Dictionaries"
 
+    def clean(self):
+        if self.word_count < 0:
+            raise ValidationError({'word_count': "Word count cannot be negative."})
+
     def save(self, *args, **kwargs):
+        self.clean()
         super(Dictionary, self).save(*args, **kwargs)
         if self.cover_image:
             try:
@@ -102,7 +110,7 @@ class Word(models.Model):
         upload_to=word_image_upload_to,
         blank=True,
         null=True,
-        max_length=400,  # Увеличиваем длину пути
+        max_length=255,  # Увеличиваем длину пути
         validators=[validate_image_extension]
     )
     tags = models.ManyToManyField(Tag, related_name='words', blank=True)
@@ -118,7 +126,12 @@ class Word(models.Model):
         verbose_name = "Word"
         verbose_name_plural = "Words"
 
+    def clean(self):
+        if self.dictionary.word_count < 0:
+            raise ValidationError({'dictionary': "Word count cannot be negative."})
+
     def save(self, *args, **kwargs):
+        self.clean()
         super(Word, self).save(*args, **kwargs)
         if self.image_path:
             try:
