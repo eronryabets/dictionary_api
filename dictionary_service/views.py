@@ -1,20 +1,24 @@
 from rest_framework import viewsets, permissions
 from .models import Dictionary, Word, Tag
-from .serializers import DictionarySerializer, WordSerializer, TagSerializer
+from .pagination import DictionaryPagination
+from .serializers import DictionaryListSerializer, DictionaryDetailSerializer, WordSerializer, TagSerializer
 from .utils.permissions import IsOwner
 
 
 class DictionaryViewSet(viewsets.ModelViewSet):
-    serializer_class = DictionarySerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwner]  # TODO IsOwner
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return DictionaryListSerializer
+        return DictionaryDetailSerializer
 
     def get_queryset(self):
-        # Возвращаем только словари, принадлежащие текущему пользователю
+        # Возвращаем только словари текущего пользователя
         return Dictionary.objects.filter(user_id=self.request.user.id)
 
-    def perform_create(self, serializer):
-        # Автоматически устанавливаем user_id при создании словаря
-        serializer.save(user_id=self.request.user.id)
+    # Устанавливаем пагинацию только для списка словарей
+    pagination_class = DictionaryPagination
 
 
 class WordViewSet(viewsets.ModelViewSet):
