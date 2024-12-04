@@ -150,7 +150,7 @@ class Word(models.Model):
 
 class UserWord(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name='user_words')
+    word = models.OneToOneField(Word, on_delete=models.CASCADE, related_name='userword')
     count = models.IntegerField(default=0)
     progress = models.FloatField(default=0.0)
     last_accessed = models.DateTimeField(auto_now=True)
@@ -158,7 +158,6 @@ class UserWord(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('word',)
         indexes = [
             models.Index(fields=['word']),
         ]
