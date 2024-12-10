@@ -107,7 +107,7 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
 
     def get_words(self, obj):
         request = self.context.get('request')
-        words = obj.words.all().order_by('created_at')  # Можно настроить сортировку
+        words = obj.words.all().order_by('-created_at')  # TODO настроить потом динамическую сортировку
         paginator = WordPagination()
         paginated_words = paginator.paginate_queryset(words, request)
         serializer = WordSerializer(paginated_words, many=True, context={'request': request})
