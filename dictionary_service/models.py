@@ -104,8 +104,8 @@ class Tag(models.Model):
 class Word(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dictionary = models.ForeignKey(Dictionary, on_delete=models.CASCADE, related_name='words')
-    word = models.CharField(max_length=255)
-    translation = models.CharField(max_length=255)
+    word = models.CharField(max_length=500)
+    translation = models.CharField(max_length=500)
     image_path = models.ImageField(
         upload_to=word_image_upload_to,
         blank=True,
