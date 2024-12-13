@@ -18,6 +18,10 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         return (Dictionary.objects.filter(user_id=self.request.user.id)
                 .prefetch_related('words__userword', 'words__tags'))
 
+    def perform_create(self, serializer):
+        # Устанавливаем user_id на основе аутентифицированного пользователя
+        serializer.save(user_id=self.request.user.id)
+
     # Устанавливаем пагинацию только для списка словарей
     pagination_class = DictionaryPagination
 
