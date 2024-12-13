@@ -16,6 +16,7 @@ class DictionaryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Возвращаем только словари текущего пользователя с предварительной выборкой связанных слов и их UserWord
         return (Dictionary.objects.filter(user_id=self.request.user.id)
+                .order_by('-updated_at')  # Сортировка по updated_at убывающим порядком
                 .prefetch_related('words__userword', 'words__tags'))
 
     def perform_create(self, serializer):
