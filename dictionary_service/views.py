@@ -1,7 +1,16 @@
-from rest_framework import viewsets, permissions
+
+from rest_framework import viewsets, permissions, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import Dictionary, Word, Tag
-from .pagination import DictionaryPagination
-from .serializers import DictionaryListSerializer, DictionaryDetailSerializer, WordSerializer, TagSerializer
+from .pagination import DictionaryPagination, WordPagination
+from .serializers import (
+    DictionaryListSerializer,
+    DictionaryDetailSerializer,
+    WordSerializer,
+    WordProgressSerializer,
+    TagSerializer
+)
 from .utils.permissions import IsOwner
 
 
@@ -25,6 +34,19 @@ class DictionaryViewSet(viewsets.ModelViewSet):
 
     # Устанавливаем пагинацию только для списка словарей
     pagination_class = DictionaryPagination
+
+    # Для выдачи word, progress.
+    @action(detail=True, methods=['get'], url_path='words_progress',
+            permission_classes=[permissions.IsAuthenticated, IsOwner])
+    def words_progress(self, request, pk=None):
+        """
+        Возвращает все слова из выбранного словаря вместе с их значениями progress без пагинации.
+        URL: /dictionaries/<id>/words_progress/
+        """
+        dictionary = self.get_object()
+        words = dictionary.words.all().select_related('userword')
+        serializer = WordProgressSerializer(words, many=True)
+        return Response(serializer.data)
 
 
 class WordViewSet(viewsets.ModelViewSet):

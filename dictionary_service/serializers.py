@@ -112,3 +112,12 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
         paginated_words = paginator.paginate_queryset(words, request)
         serializer = WordSerializer(paginated_words, many=True, context={'request': request})
         return paginator.get_paginated_response(serializer.data).data
+
+
+# Для выдачи word, progress.
+class WordProgressSerializer(serializers.ModelSerializer):
+    progress = serializers.FloatField(source='userword.progress')
+
+    class Meta:
+        model = Word
+        fields = ['word', 'progress']
