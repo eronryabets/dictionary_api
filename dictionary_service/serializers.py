@@ -18,9 +18,9 @@ class WordSerializer(serializers.ModelSerializer):
     )
     image_path = serializers.ImageField(required=False, allow_null=True)
 
-    # Новые поля для UserWord
+    # Поля из UserWord
     count = serializers.IntegerField(source='userword.count', read_only=True)
-    progress = serializers.FloatField(source='userword.progress', read_only=True)
+    progress = serializers.FloatField(required=False, write_only=True)
 
     class Meta:
         model = Word
@@ -37,7 +37,7 @@ class WordSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'count', 'progress', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'count', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         tag_names = validated_data.pop('tag_names', [])
@@ -55,16 +55,41 @@ class WordSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         tag_names = validated_data.pop('tag_names', None)
+        progress = validated_data.pop('progress', None)  # Извлекаем 'progress' из данных
+
+        # Обновляем поля модели Word
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        # Обновляем теги, если они были предоставлены
         if tag_names is not None:
             tags = []
             for name in tag_names:
                 tag, created = Tag.objects.get_or_create(name=name)
                 tags.append(tag)
             instance.tags.set(tags)
+
+        # Обновляем progress в связанной модели UserWord, если он был предоставлен
+        if progress is not None:
+            try:
+                userword = instance.userword
+                userword.progress = progress
+                userword.save()
+            except UserWord.DoesNotExist:
+                # Создаём запись, если она отсутствует
+                UserWord.objects.create(word=instance, progress=progress)
+
         return instance
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Добавляем progress из userword для чтения
+        if hasattr(instance, 'userword') and instance.userword:
+            ret['progress'] = instance.userword.progress
+        else:
+            ret['progress'] = 0.0
+        return ret
 
 
 # Возвращает только основные поля словаря без вложенных слов
@@ -107,16 +132,16 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
 
     def get_words(self, obj):
         request = self.context.get('request')
-        words = obj.words.all().order_by('-created_at')  # TODO настроить потом динамическую сортировку
+        words = obj.words.all().order_by('-created_at')  # Сортировка по убыванию даты создания
         paginator = WordPagination()
         paginated_words = paginator.paginate_queryset(words, request)
         serializer = WordSerializer(paginated_words, many=True, context={'request': request})
         return paginator.get_paginated_response(serializer.data).data
 
 
-# Для выдачи word, progress.
+# Для выдачи word и progress
 class WordProgressSerializer(serializers.ModelSerializer):
-    progress = serializers.FloatField(source='userword.progress')
+    progress = serializers.FloatField(source='userword.progress', default=0.0)
 
     class Meta:
         model = Word
