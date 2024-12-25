@@ -145,4 +145,4 @@ class WordProgressSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Word
-        fields = ['word', 'progress']
+        fields = ['word', 'progress', 'id']
