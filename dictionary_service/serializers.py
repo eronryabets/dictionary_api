@@ -19,7 +19,7 @@ class WordSerializer(serializers.ModelSerializer):
     image_path = serializers.ImageField(required=False, allow_null=True)
 
     # Поля из UserWord
-    count = serializers.IntegerField(source='userword.count', read_only=True)
+    count = serializers.IntegerField(required=False, write_only=True)
     progress = serializers.FloatField(required=False, write_only=True)
 
     class Meta:
@@ -37,10 +37,12 @@ class WordSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         tag_names = validated_data.pop('tag_names', [])
+        progress = validated_data.pop('progress', None)
+        count = validated_data.pop('count', None)
         word = Word.objects.create(**validated_data)
         tags = []
         for name in tag_names:
@@ -48,14 +50,15 @@ class WordSerializer(serializers.ModelSerializer):
             tags.append(tag)
         word.tags.set(tags)
 
-        # Создание записи в UserWord с count=0 и progress=0
-        UserWord.objects.create(word=word, count=0, progress=0.0)
+        # Создание записи в UserWord
+        UserWord.objects.create(word=word, count=count if count is not None else 0, progress=progress if progress is not None else 0.0)
 
         return word
 
     def update(self, instance, validated_data):
         tag_names = validated_data.pop('tag_names', None)
-        progress = validated_data.pop('progress', None)  # Извлекаем 'progress' из данных
+        progress = validated_data.pop('progress', None)
+        count = validated_data.pop('count', None)
 
         # Обновляем поля модели Word
         for attr, value in validated_data.items():
@@ -70,25 +73,30 @@ class WordSerializer(serializers.ModelSerializer):
                 tags.append(tag)
             instance.tags.set(tags)
 
-        # Обновляем progress в связанной модели UserWord, если он был предоставлен
-        if progress is not None:
+        # Обновляем progress и count в связанной модели UserWord, если они были предоставлены
+        if progress is not None or count is not None:
             try:
                 userword = instance.userword
-                userword.progress = progress
+                if progress is not None:
+                    userword.progress = progress
+                if count is not None:
+                    userword.count = count
                 userword.save()
             except UserWord.DoesNotExist:
                 # Создаём запись, если она отсутствует
-                UserWord.objects.create(word=instance, progress=progress)
+                UserWord.objects.create(word=instance, progress=progress if progress is not None else 0.0, count=count if count is not None else 0)
 
         return instance
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        # Добавляем progress из userword для чтения
+        # Добавляем progress и count из userword для чтения
         if hasattr(instance, 'userword') and instance.userword:
             ret['progress'] = instance.userword.progress
+            ret['count'] = instance.userword.count
         else:
             ret['progress'] = 0.0
+            ret['count'] = 0
         return ret
 
 
