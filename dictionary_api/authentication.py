@@ -9,6 +9,17 @@ logger = logging.getLogger(__name__)
 
 
 class JWTAuthentication(BaseAuthentication):
+    """
+    Аутентификация на основе JWT (JSON Web Token).
+
+    Проверяет наличие и валидность JWT токена в cookies ('access_token') или в заголовке
+    Authorization (формат 'Bearer <token>'). Если токен валиден, возвращает пользователя
+    (SimpleUser) и None.
+
+    :param request: HTTP-запрос, содержащий токен для аутентификации.
+    :return: Кортеж (пользователь, None) если аутентификация успешна, иначе None.
+    :raises AuthenticationFailed: Если токен истёк или недействителен.
+    """
     def authenticate(self, request):
         logger.info("Начало аутентификации в JWTAuthentication")
         token = request.COOKIES.get('access_token')

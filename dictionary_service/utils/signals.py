@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 @receiver(pre_save, sender=Dictionary)
 def delete_old_dictionary_cover(sender, instance, **kwargs):
+    """
+    Удаляет старую обложку книги перед сохранением новой обложки.
+
+    Если объект Dictionary обновляется и новая cover_image отличается от старой,
+    старая cover_image удаляется из файловой системы.
+    """
     if not instance.pk:
         return False  # Новое объект, нечего удалять
 
@@ -28,12 +34,23 @@ def delete_old_dictionary_cover(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Dictionary)
 def delete_dictionary_cover_on_delete(sender, instance, **kwargs):
+    """
+    Удаляет обложку книги при удалении объекта Dictionary.
+
+    Если у удаляемого Dictionary есть cover_image, файл обложки удаляется из файловой системы.
+    """
     if instance.cover_image and os.path.isfile(instance.cover_image.path):
         os.remove(instance.cover_image.path)
 
 
 @receiver(pre_save, sender=Word)
 def delete_old_word_image(sender, instance, **kwargs):
+    """
+    Удаляет старое изображение слова перед сохранением нового.
+
+    Если объект Word обновляется и новое image_path отличается от старого,
+    старое изображение удаляется из файловой системы.
+    """
     if not instance.pk:
         return False  # Новое объект, нечего удалять
 
@@ -50,6 +67,11 @@ def delete_old_word_image(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Word)
 def delete_word_image_on_delete(sender, instance, **kwargs):
+    """
+    Удаляет изображение слова при удалении объекта Word.
+
+    Если у удаляемого Word есть image_path, файл изображения удаляется из файловой системы.
+    """
     if instance.image_path and os.path.isfile(instance.image_path.path):
         os.remove(instance.image_path.path)
 
@@ -57,6 +79,12 @@ def delete_word_image_on_delete(sender, instance, **kwargs):
 # Новые сигналы для обновления word_count
 @receiver(post_save, sender=Word)
 def increment_word_count(sender, instance, created, **kwargs):
+    """
+    Увеличивает счетчик слов в Dictionary при добавлении нового Word.
+
+    Если Word создается впервые, счетчик word_count в связанном Dictionary увеличивается на 1,
+    а поле updated_at обновляется текущим временем.
+    """
     if created:
         with transaction.atomic():
             Dictionary.objects.filter(id=instance.dictionary.id).update(
@@ -69,6 +97,13 @@ def increment_word_count(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender=Word)
 def decrement_word_count(sender, instance, **kwargs):
+    """
+    Уменьшает счетчик слов в Dictionary при удалении Word.
+
+    При удалении Word счетчик word_count в связанном Dictionary уменьшается на 1,
+    поле updated_at обновляется текущим временем. Если word_count становится меньше 0,
+    он сбрасывается в 0, и генерируется предупреждение.
+    """
     with transaction.atomic():
         Dictionary.objects.filter(id=instance.dictionary.id).update(
             word_count=F('word_count') - 1,

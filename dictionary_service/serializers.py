@@ -4,12 +4,21 @@ from .pagination import WordPagination
 
 
 class TagSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для модели Tag. Возвращает идентификатор, название и временные метки создания и обновления тега.
+    """
     class Meta:
         model = Tag
         fields = ['id', 'name', 'created_at', 'updated_at']
 
 
 class WordSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для модели Word.
+    - Включает связанные теги через `TagSerializer`.
+    - Позволяет добавлять теги по именам через поле `tag_names`.
+    - Обрабатывает изображение слова и связанные данные из модели `UserWord` (count и progress).
+    """
     tags = TagSerializer(many=True, read_only=True)
     tag_names = serializers.ListField(
         child=serializers.CharField(max_length=100),
@@ -40,6 +49,12 @@ class WordSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
+        """
+        Создаёт новый объект Word вместе с связанными тегами и записью в UserWord.
+
+        :param validated_data: Валидированные данные для создания Word.
+        :return: Созданный экземпляр Word.
+        """
         tag_names = validated_data.pop('tag_names', [])
         progress = validated_data.pop('progress', None)
         count = validated_data.pop('count', None)
@@ -56,6 +71,13 @@ class WordSerializer(serializers.ModelSerializer):
         return word
 
     def update(self, instance, validated_data):
+        """
+        Обновляет существующий объект Word вместе с тегами и связанными данными UserWord.
+
+        :param instance: Экземпляр Word для обновления.
+        :param validated_data: Валидированные данные для обновления.
+        :return: Обновлённый экземпляр Word.
+        """
         tag_names = validated_data.pop('tag_names', None)
         progress = validated_data.pop('progress', None)
         count = validated_data.pop('count', None)
@@ -89,6 +111,12 @@ class WordSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
+        """
+        Добавляет поля `progress` и `count` из связанной модели UserWord в представление.
+
+        :param instance: Экземпляр Word.
+        :return: Сериализованные данные с добавленными полями `progress` и `count`.
+        """
         ret = super().to_representation(instance)
         # Добавляем progress и count из userword для чтения
         if hasattr(instance, 'userword') and instance.userword:
@@ -102,6 +130,10 @@ class WordSerializer(serializers.ModelSerializer):
 
 # Возвращает только основные поля словаря без вложенных слов
 class DictionaryListSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для списка словарей (Dictionary).
+    Возвращает основные поля словаря без вложенных слов.
+    """
     class Meta:
         model = Dictionary
         fields = [
@@ -119,6 +151,10 @@ class DictionaryListSerializer(serializers.ModelSerializer):
 
 # Включает вложенное поле words, которое представляет собой пагинированный список слов
 class DictionaryDetailSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для детального представления словаря (Dictionary).
+    Включает вложенное поле `words`, представляющее собой пагинированный список слов.
+    """
     words = serializers.SerializerMethodField()
     cover_image = serializers.ImageField(required=False, allow_null=True)
     word_count = serializers.IntegerField(read_only=True)
@@ -139,6 +175,12 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user_id', 'word_count', 'created_at', 'updated_at']
 
     def get_words(self, obj):
+        """
+        Получает пагинированный список слов, связанных с данным словарем.
+
+        :param obj: Экземпляр Dictionary.
+        :return: Сериализованные данные пагинированного списка слов.
+        """
         request = self.context.get('request')
         words = obj.words.all().order_by('-created_at')  # Сортировка по убыванию даты создания
         paginator = WordPagination()
@@ -149,6 +191,10 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
 
 # Для выдачи word и progress
 class WordProgressSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для модели Word, предназначенный для выдачи слова и прогресса пользователя.
+    Включает поле `progress` из связанной модели UserWord.
+    """
     progress = serializers.FloatField(source='userword.progress', default=0.0)
 
     class Meta:
