@@ -1,4 +1,3 @@
-
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,7 +12,7 @@ from .serializers import (
 )
 from .utils.permissions import IsOwner
 from django_filters.rest_framework import DjangoFilterBackend
-
+from .filters import WordFilter
 
 
 class DictionaryViewSet(viewsets.ModelViewSet):
@@ -95,7 +94,7 @@ class WordViewSet(viewsets.ModelViewSet):
     serializer_class = WordSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwner]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['dictionary']
+    filterset_class = WordFilter  # кастомный фильтр
     search_fields = ['word', 'translation']
     ordering_fields = ['word', 'created_at']
     ordering = ['-created_at']
