@@ -12,6 +12,8 @@ from .serializers import (
     TagSerializer
 )
 from .utils.permissions import IsOwner
+from django_filters.rest_framework import DjangoFilterBackend
+
 
 
 class DictionaryViewSet(viewsets.ModelViewSet):
@@ -88,24 +90,25 @@ class WordViewSet(viewsets.ModelViewSet):
     - Позволяет просматривать, создавать, редактировать и удалять слова.
     - Использует WordSerializer для сериализации данных.
     - Применяет кастомные разрешения для обеспечения доступа только владельцам слов.
-    - Подключает пагинацию для списка слов.
+    - Подключает пагинацию, фильтрацию и поиск для списка слов.
     """
     serializer_class = WordSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwner]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['dictionary']
+    search_fields = ['word', 'translation']
+    ordering_fields = ['word', 'created_at']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         """
         Возвращает только слова, принадлежащие текущему пользователю.
-
-        :return: QuerySet слов, принадлежащих текущему пользователю.
         """
-        return Word.objects.filter(dictionary__user_id=self.request.user.id).select_related('userword')
+        return Word.objects.filter(dictionary__user_id=self.request.user.id).select_related('userword').prefetch_related('tags')
 
     def perform_create(self, serializer):
         """
         Автоматически устанавливает user_id через связанный словарь при создании нового слова.
-
-        :param serializer: Сериализатор, содержащий данные для создания слова.
         """
         serializer.save()
 
