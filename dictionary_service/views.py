@@ -13,6 +13,7 @@ from .serializers import (
 from .utils.permissions import IsOwner
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import WordFilter
+from django.db.models import F
 
 
 class DictionaryViewSet(viewsets.ModelViewSet):
@@ -89,21 +90,29 @@ class WordViewSet(viewsets.ModelViewSet):
     - Позволяет просматривать, создавать, редактировать и удалять слова.
     - Использует WordSerializer для сериализации данных.
     - Применяет кастомные разрешения для обеспечения доступа только владельцам слов.
-    - Подключает Пагинацию (в сериалайзере), Фильтрацию, Поиск и Сортировку для списка слов.
+    - Подключает Пагинацию (в сериалайзере), Фильтрацию и Поиск для списка слов.
+    - Поддерживает сортировку по `count`, `progress` и `created_at`.
     """
     serializer_class = WordSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwner]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = WordFilter  # Фильтр
-    search_fields = ['word', 'translation']  # Поиск
-    ordering_fields = ['word', 'created_at']
-    ordering = ['-created_at']
+    search_fields = ['word', 'translation']  # Поиск по слову, или его переводу
+    ordering_fields = ['word', 'created_at', 'count', 'progress']
+    ordering = ['-created_at']  # Дефолтная сортировка
 
     def get_queryset(self):
         """
         Возвращает только слова, принадлежащие текущему пользователю.
+        Аннотирует `count` и `progress` для возможности сортировки по этим полям.
         """
-        return Word.objects.filter(dictionary__user_id=self.request.user.id).select_related('userword').prefetch_related('tags')
+        return Word.objects.filter(dictionary__user_id=self.request.user.id) \
+            .select_related('userword') \
+            .prefetch_related('tags') \
+            .annotate(
+            count=F('userword__count'),
+            progress=F('userword__progress')
+        )
 
     def perform_create(self, serializer):
         """
