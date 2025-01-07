@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Dictionary, Word, Tag
-from .pagination import DictionaryPagination, WordPagination
+from .pagination import DictionaryPagination
 from .serializers import (
     DictionaryListSerializer,
     DictionaryDetailSerializer,
@@ -89,13 +89,13 @@ class WordViewSet(viewsets.ModelViewSet):
     - Позволяет просматривать, создавать, редактировать и удалять слова.
     - Использует WordSerializer для сериализации данных.
     - Применяет кастомные разрешения для обеспечения доступа только владельцам слов.
-    - Подключает пагинацию, фильтрацию и поиск для списка слов.
+    - Подключает Пагинацию (в сериалайзере), Фильтрацию, Поиск и Сортировку для списка слов.
     """
     serializer_class = WordSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwner]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class = WordFilter  # кастомный фильтр
-    search_fields = ['word', 'translation']
+    filterset_class = WordFilter  # Фильтр
+    search_fields = ['word', 'translation']  # Поиск
     ordering_fields = ['word', 'created_at']
     ordering = ['-created_at']
 
