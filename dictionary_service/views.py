@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Dictionary, Word, Tag
-from .pagination import DictionaryPagination
+from .pagination import DictionaryPagination, WordPagination
 from .serializers import (
     DictionaryListSerializer,
     DictionaryDetailSerializer,
@@ -100,6 +100,7 @@ class WordViewSet(viewsets.ModelViewSet):
     search_fields = ['word', 'translation']  # Поиск по слову, или его переводу
     ordering_fields = ['word', 'created_at', 'count', 'progress']
     ordering = ['-created_at']  # Дефолтная сортировка
+    pagination_class = WordPagination  # Устанавливаем класс пагинации
 
     def get_queryset(self):
         """
