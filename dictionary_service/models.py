@@ -221,6 +221,7 @@ class UserWord(models.Model):
         - word (OneToOneField): Ссылка на связанный Word.
         - count (IntegerField): Количество раз, когда пользователь взаимодействовал со словом.
         - progress (FloatField): Прогресс пользователя в изучении слова.
+        - highlight_disabled (BooleanField): По умолчанию подсветка слова Включена.
         - last_accessed (DateTimeField): Дата и время последнего доступа.
         - created_at (DateTimeField): Дата и время создания.
         - updated_at (DateTimeField): Дата и время последнего обновления.
@@ -233,6 +234,7 @@ class UserWord(models.Model):
     word = models.OneToOneField(Word, on_delete=models.CASCADE, related_name='userword')
     count = models.IntegerField(default=0)
     progress = models.FloatField(default=0.0)
+    highlight_disabled = models.BooleanField(default=False)
     last_accessed = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

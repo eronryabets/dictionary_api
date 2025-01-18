@@ -78,7 +78,14 @@ class WordAdmin(admin.ModelAdmin):
 
 @admin.register(UserWord)
 class UserWordAdmin(admin.ModelAdmin):
-    list_display = ('id', 'word', 'count', 'progress', 'last_accessed', 'created_at', 'updated_at')
+    list_display = (
+        'id',
+        'word',
+        'count',
+        'progress',
+        'highlight_disabled',
+        'last_accessed',
+        'created_at',
+        'updated_at'
+    )
     search_fields = ('word__word',)
-    readonly_fields = ('id', 'word', 'count', 'progress', 'last_accessed', 'created_at', 'updated_at')
-    ordering = ('word',)

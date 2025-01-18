@@ -7,6 +7,7 @@ class TagSerializer(serializers.ModelSerializer):
     """
     Сериализатор для модели Tag. Возвращает идентификатор, название и временные метки создания и обновления тега.
     """
+
     class Meta:
         model = Tag
         fields = ['id', 'name', 'created_at', 'updated_at']
@@ -30,6 +31,11 @@ class WordSerializer(serializers.ModelSerializer):
     # Поля из UserWord
     count = serializers.IntegerField(required=False, write_only=True)
     progress = serializers.FloatField(required=False, write_only=True)
+    highlight_disabled = serializers.BooleanField(
+        required=False,
+        write_only=True,
+        default=False
+    )
 
     class Meta:
         model = Word
@@ -43,6 +49,7 @@ class WordSerializer(serializers.ModelSerializer):
             'tag_names',
             'count',
             'progress',
+            'highlight_disabled',
             'created_at',
             'updated_at',
         ]
@@ -58,6 +65,10 @@ class WordSerializer(serializers.ModelSerializer):
         tag_names = validated_data.pop('tag_names', [])
         progress = validated_data.pop('progress', None)
         count = validated_data.pop('count', None)
+
+        # Получаем флаг, если передали (либо False)
+        highlight_disabled = validated_data.pop('highlight_disabled', False)
+
         word = Word.objects.create(**validated_data)
         tags = []
         for name in tag_names:
@@ -66,7 +77,12 @@ class WordSerializer(serializers.ModelSerializer):
         word.tags.set(tags)
 
         # Создание записи в UserWord
-        UserWord.objects.create(word=word, count=count if count is not None else 0, progress=progress if progress is not None else 0.0)
+        UserWord.objects.create(
+            word=word,
+            count=count if count is not None else 0,
+            progress=progress if progress is not None else 0.0,
+            highlight_disabled=highlight_disabled
+        )
 
         return word
 
@@ -78,11 +94,14 @@ class WordSerializer(serializers.ModelSerializer):
         :param validated_data: Валидированные данные для обновления.
         :return: Обновлённый экземпляр Word.
         """
+        # Извлекаем значения
         tag_names = validated_data.pop('tag_names', None)
         progress = validated_data.pop('progress', None)
         count = validated_data.pop('count', None)
+        # Получаем флаг, если передали
+        highlight_disabled = validated_data.pop('highlight_disabled', None)
 
-        # Обновляем поля модели Word
+        # Сначала обновляем поля самой модели Word
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -95,36 +114,42 @@ class WordSerializer(serializers.ModelSerializer):
                 tags.append(tag)
             instance.tags.set(tags)
 
-        # Обновляем progress и count в связанной модели UserWord, если они были предоставлены
-        if progress is not None or count is not None:
-            try:
-                userword = instance.userword
-                if progress is not None:
-                    userword.progress = progress
-                if count is not None:
-                    userword.count = count
-                userword.save()
-            except UserWord.DoesNotExist:
-                # Создаём запись, если она отсутствует
-                UserWord.objects.create(word=instance, progress=progress if progress is not None else 0.0, count=count if count is not None else 0)
+        # --- ВАЖНО: теперь обновляем UserWord
+        # Пытаемся получить связанную запись
+        try:
+            userword = instance.userword
+        except UserWord.DoesNotExist:
+            # Если её нет, создаём
+            userword = UserWord.objects.create(word=instance)
 
+        # Обновляем нужные поля, если они пришли
+        if progress is not None:
+            userword.progress = progress
+        if count is not None:
+            userword.count = count
+        if highlight_disabled is not None:
+            userword.highlight_disabled = highlight_disabled
+
+        userword.save()
         return instance
 
     def to_representation(self, instance):
         """
-        Добавляет поля `progress` и `count` из связанной модели UserWord в представление.
+        Добавляет поля `progress`,`count` и 'highlight_disabled' из связанной модели UserWord в представление.
 
         :param instance: Экземпляр Word.
-        :return: Сериализованные данные с добавленными полями `progress` и `count`.
+        :return: Сериализованные данные с добавленными полями `progress`,`count` и 'highlight_disabled'.
         """
         ret = super().to_representation(instance)
-        # Добавляем progress и count из userword для чтения
+        # Добавляем progress, count, highlight_disabled из userword
         if hasattr(instance, 'userword') and instance.userword:
             ret['progress'] = instance.userword.progress
             ret['count'] = instance.userword.count
+            ret['highlight_disabled'] = instance.userword.highlight_disabled
         else:
             ret['progress'] = 0.0
             ret['count'] = 0
+            ret['highlight_disabled'] = False
         return ret
 
 
@@ -134,6 +159,7 @@ class DictionaryListSerializer(serializers.ModelSerializer):
     Сериализатор для списка словарей (Dictionary).
     Возвращает основные поля словаря без вложенных слов.
     """
+
     class Meta:
         model = Dictionary
         fields = [
