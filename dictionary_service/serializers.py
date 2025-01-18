@@ -218,11 +218,12 @@ class DictionaryDetailSerializer(serializers.ModelSerializer):
 # Для выдачи word и progress
 class WordProgressSerializer(serializers.ModelSerializer):
     """
-    Сериализатор для модели Word, предназначенный для выдачи слова и прогресса пользователя.
-    Включает поле `progress` из связанной модели UserWord.
+    Сериализатор для модели Word, предназначенный для выдачи слова и прогресса пользователя,
+    а также флага highlight_disabled из связанной модели UserWord.
     """
     progress = serializers.FloatField(source='userword.progress', default=0.0)
+    highlight_disabled = serializers.BooleanField(source='userword.highlight_disabled', default=False)
 
     class Meta:
         model = Word
-        fields = ['word', 'progress', 'id']
+        fields = ['id', 'word', 'progress', 'highlight_disabled']
