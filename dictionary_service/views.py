@@ -1,7 +1,9 @@
-from rest_framework import viewsets, permissions, filters
+from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Dictionary, Word, Tag
+from rest_framework.views import APIView
+
+from .models import Dictionary, Word, Tag, UserWord
 from .pagination import DictionaryPagination, WordPagination
 from .serializers import (
     DictionaryListSerializer,
@@ -134,3 +136,52 @@ class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     queryset = Tag.objects.all()
     permission_classes = [permissions.IsAuthenticated]
+
+
+class BulkWordActionView(APIView):
+    """
+    APIView для массовых действий со словами.
+
+    Поддерживает следующие действия:
+      - "delete": Массовое удаление слов.
+      - "disable_highlight": Выключает подсветку для выбранных слов.
+      - "enable_highlight": Включает подсветку для выбранных слов.
+    """
+
+    def post(self, request, *args, **kwargs):
+        """
+               Обрабатывает POST-запрос для выполнения массового действия над словами.
+
+               Ожидает:
+                 - action: строка с действием ("delete", "disable_highlight", "enable_highlight").
+                 - word_ids: непустой список идентификаторов слов.
+               принимает JSON вида:
+                            {
+                              "action": "delete", //или "disable_highlight" или "enable_highlight",
+                              "word_ids": ["uuid1", "uuid2", ...]
+                            }
+               Возвращает сообщение об успешном выполнении действия или ошибку при неправильных данных.
+        """
+        action = request.data.get("action")
+        word_ids = request.data.get("word_ids", [])
+
+        if not word_ids or not isinstance(word_ids, list):
+            return Response({"detail": "word_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if action == "delete":
+            # Массовое удаление
+            Word.objects.filter(pk__in=word_ids).delete()
+            return Response({"detail": f"Deleted {len(word_ids)} words."}, status=status.HTTP_200_OK)
+
+        elif action == "disable_highlight":
+            # Выставляем highlight_disabled = True для всех
+            UserWord.objects.filter(word_id__in=word_ids).update(highlight_disabled=True)
+            return Response({"detail": f"Disabled highlight for {len(word_ids)} words."}, status=status.HTTP_200_OK)
+
+        elif action == "enable_highlight":
+            # Выставляем highlight_disabled = False
+            UserWord.objects.filter(word_id__in=word_ids).update(highlight_disabled=False)
+            return Response({"detail": f"Enabled highlight for {len(word_ids)} words."}, status=status.HTTP_200_OK)
+
+        else:
+            return Response({"detail": f"Unknown action: {action}"}, status=status.HTTP_400_BAD_REQUEST)
