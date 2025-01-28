@@ -57,10 +57,10 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'corsheaders',
-    'debug_toolbar',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
+    'silk',
 
     'dictionary_service'
 
@@ -76,7 +76,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     'corsheaders.middleware.CorsMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'silk.middleware.SilkyMiddleware',
 
 ]
 
