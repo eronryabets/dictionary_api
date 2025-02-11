@@ -134,6 +134,7 @@ class Tag(models.Model):
         - name (str): Уникальное название тега.
         - created_at (DateTimeField): Дата и время создания.
         - updated_at (DateTimeField): Дата и время последнего обновления.
+        - Сортировка выдачи тегов от самых новых - к самым старым.
 
     Методы:
         - __str__(): Возвращает название тега.
@@ -142,6 +143,11 @@ class Tag(models.Model):
     name = models.CharField(max_length=100, unique=True)  # Уникальное название тега
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']  # Теги будут сортироваться от самых новых к самым старым
+        verbose_name = "Tag"
+        verbose_name_plural = "Tags"
 
     def __str__(self):
         return self.name
