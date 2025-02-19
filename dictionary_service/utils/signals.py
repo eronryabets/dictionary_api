@@ -1,7 +1,7 @@
 from django.db import transaction
-from django.db.models.signals import pre_save, post_delete, post_save
+from django.db.models.signals import pre_save, post_delete, post_save, pre_delete
 from django.dispatch import receiver
-from dictionary_service.models import Dictionary, Word
+from dictionary_service.models import Dictionary, Word, DictionaryProgress
 import os
 from django.db.models import F
 from django.utils import timezone
@@ -117,3 +117,34 @@ def decrement_word_count(sender, instance, **kwargs):
         else:
             logger.info(
                 f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count and updated updated_at.")
+
+
+@receiver(post_save, sender=Dictionary)
+def create_dictionary_progress(sender, instance, created, **kwargs):
+    if created:
+        # При создании нового словаря создаём запись прогресса.
+        DictionaryProgress.objects.create(dictionary=instance)
+
+
+@receiver(pre_delete, sender=Word)
+def store_word_progress_before_deletion(sender, instance, **kwargs):
+    """
+    Сохраняет значение прогресса слова перед его удалением.
+    Это нужно, так как связанная запись UserWord удаляется каскадом.
+    """
+    try:
+        instance._progress_for_deletion = instance.userword.progress
+    except Exception:
+        instance._progress_for_deletion = 0.0
+
+
+@receiver(post_delete, sender=Word)
+def update_dictionary_progress_on_word_deletion(sender, instance, **kwargs):
+    """
+    Обновляет статистику словаря при удалении слова.
+    Вычитает значение прогресса удаляемого слова из DictionaryProgress.
+    """
+    progress = getattr(instance, '_progress_for_deletion', 0.0)
+    dictionary = instance.dictionary
+    if hasattr(dictionary, 'progress'):
+        dictionary.progress.remove_word(progress)
