@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Dictionary, Word, Tag, UserWord
+from .models import Dictionary, Word, Tag, UserWord, DictionaryProgress
 from .pagination import WordPagination
 
 
@@ -226,3 +226,17 @@ class WordProgressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Word
         fields = ['id', 'word', 'progress', 'highlight_disabled']
+
+
+class DictionaryProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DictionaryProgress
+        fields = [
+            'total_progress',
+            'overall_progress',
+            'group_0_2',
+            'group_3_4',
+            'group_5_6',
+            'group_7_8',
+            'group_9_10',
+        ]

@@ -3,14 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Dictionary, Word, Tag, UserWord
+from .models import Dictionary, Word, Tag, UserWord, DictionaryProgress
 from .pagination import DictionaryPagination, WordPagination
 from .serializers import (
     DictionaryListSerializer,
     DictionaryDetailSerializer,
     WordSerializer,
     WordProgressSerializer,
-    TagSerializer
+    TagSerializer, DictionaryProgressSerializer
 )
 from .utils.permissions import IsOwner
 from django_filters.rest_framework import DjangoFilterBackend
@@ -82,6 +82,21 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         dictionary = self.get_object()
         words = dictionary.words.all().select_related('userword')
         serializer = WordProgressSerializer(words, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='progress',
+            permission_classes=[permissions.IsAuthenticated, IsOwner])
+    def progress(self, request, pk=None):
+        """
+        Возвращает статистику прогресса для выбранного словаря.
+        URL: /dictionaries/<id>/progress/
+        """
+        dictionary = self.get_object()
+        try:
+            progress_instance = dictionary.progress
+        except DictionaryProgress.DoesNotExist:
+            return Response({"detail": "Dictionary progress not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = DictionaryProgressSerializer(progress_instance)
         return Response(serializer.data)
 
 
