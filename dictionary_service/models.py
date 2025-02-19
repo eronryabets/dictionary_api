@@ -303,83 +303,51 @@ class DictionaryProgress(models.Model):
         else:
             return None
 
+    def _compute_overall_progress(self):
+        """
+        Вычисляет общий прогресс словаря в процентах на основе total_progress и количества слов.
+        Если word_count равен 0, возвращает 0.
+        """
+        total_words = self.dictionary.word_count
+        if total_words <= 0:
+            return 0
+        return round((self.total_progress / total_words) * 10)
+
+    def _adjust_group_counter(self, progress, delta):
+        """
+        Универсально изменяет счётчик группы.
+        :param progress: Значение прогресса слова.
+        :param delta: Изменение (например, +1 или -1).
+        """
+        group = self._get_group(progress)
+        if group == '0_2':
+            self.group_0_2 = max(0, self.group_0_2 + delta)
+        elif group == '3_4':
+            self.group_3_4 = max(0, self.group_3_4 + delta)
+        elif group == '5_6':
+            self.group_5_6 = max(0, self.group_5_6 + delta)
+        elif group == '7_8':
+            self.group_7_8 = max(0, self.group_7_8 + delta)
+        elif group == '9_10':
+            self.group_9_10 = max(0, self.group_9_10 + delta)
+
     def add_word(self, progress):
         """
         Обновляет статистику при добавлении нового слова.
         :param progress: Прогресс нового слова (от 0 до 10)
         """
+        # При добавлении нового слова число слов должно быть увеличено на 1,
+        # так как сигнал increment_word_count обновит dictionary.word_count позже.
+        new_total_words = self.dictionary.word_count + 1
+
         # Обновляем суммарный прогресс
         self.total_progress += progress
 
-        # Получаем текущее количество слов в словаре (word_count должно обновляться отдельно)
-        total_words = self.dictionary.word_count
-
-        # Если total_words равен 0 (например, при добавлении первого слова), избегаем деления на 0.
-        if total_words == 0:
-            total_words = 1
-
-        # Пересчитываем общий прогресс: среднее значение (по 10-бальной шкале) умножаем на 10 для перевода в проценты.
-        self.overall_progress = round((self.total_progress / total_words) * 10)
-
         # Обновляем счетчик группы для нового слова
-        group = self._get_group(progress)
-        if group == '0_2':
-            self.group_0_2 += 1
-        elif group == '3_4':
-            self.group_3_4 += 1
-        elif group == '5_6':
-            self.group_5_6 += 1
-        elif group == '7_8':
-            self.group_7_8 += 1
-        elif group == '9_10':
-            self.group_9_10 += 1
+        self._adjust_group_counter(progress, 1)
 
-        self.save()
-
-    def update_word(self, old_progress, new_progress):
-        """
-        Обновляет статистику при изменении прогресса слова.
-        Пересчет общего прогресса и изменение счетчиков групп происходит только если слово меняет свою группу.
-
-        :param old_progress: Предыдущее значение прогресса слова.
-        :param new_progress: Новое значение прогресса слова.
-        """
-        old_group = self._get_group(old_progress)
-        new_group = self._get_group(new_progress)
-
-        # Если слово остается в той же группе, пересчет не требуется
-        if old_group == new_group:
-            return
-
-        # Обновляем суммарный прогресс
-        self.total_progress = self.total_progress - old_progress + new_progress
-        total_words = self.dictionary.word_count
-        self.overall_progress = round((self.total_progress / total_words) * 10)
-
-        # Обновляем счетчики групп: уменьшаем для старой группы...
-        if old_group == '0_2' and self.group_0_2 > 0:
-            self.group_0_2 -= 1
-        elif old_group == '3_4' and self.group_3_4 > 0:
-            self.group_3_4 -= 1
-        elif old_group == '5_6' and self.group_5_6 > 0:
-            self.group_5_6 -= 1
-        elif old_group == '7_8' and self.group_7_8 > 0:
-            self.group_7_8 -= 1
-        elif old_group == '9_10' and self.group_9_10 > 0:
-            self.group_9_10 -= 1
-
-        # ... и увеличиваем для новой группы
-        if new_group == '0_2':
-            self.group_0_2 += 1
-        elif new_group == '3_4':
-            self.group_3_4 += 1
-        elif new_group == '5_6':
-            self.group_5_6 += 1
-        elif new_group == '7_8':
-            self.group_7_8 += 1
-        elif new_group == '9_10':
-            self.group_9_10 += 1
-
+        # Пересчитываем общий прогресс: (total_progress / новое число слов) * 10
+        self.overall_progress = round((self.total_progress / new_total_words) * 10)
         self.save()
 
     def remove_word(self, progress):
@@ -387,27 +355,39 @@ class DictionaryProgress(models.Model):
         Обновляет статистику словаря при удалении слова.
         Вычитает значение прогресса удаляемого слова из total_progress,
         пересчитывает overall_progress и уменьшает счетчик соответствующей группы.
+        При этом учитывается, что на момент вызова значение dictionary.word_count ещё не обновлено,
+        поэтому для расчёта нового количества слов используем (dictionary.word_count - 1).
         """
         self.total_progress -= progress
-        # Получаем обновлённое количество слов (word_count обновляется в сигнале)
-        total_words = self.dictionary.word_count
-        if total_words > 0:
-            self.overall_progress = round((self.total_progress / total_words) * 10)
+
+        # Предполагаем, что на момент вызова remove_word word_count ещё не обновлён,
+        # поэтому фактическое число оставшихся слов будет:
+        new_total_words = self.dictionary.word_count - 1
+
+        if new_total_words > 0:
+            self.overall_progress = round((self.total_progress / new_total_words) * 10)
         else:
             self.overall_progress = 0
             self.total_progress = 0
 
-        # Определяем группу удаляемого слова и уменьшаем счетчик
-        group = self._get_group(progress)
-        if group == '0_2' and self.group_0_2 > 0:
-            self.group_0_2 -= 1
-        elif group == '3_4' and self.group_3_4 > 0:
-            self.group_3_4 -= 1
-        elif group == '5_6' and self.group_5_6 > 0:
-            self.group_5_6 -= 1
-        elif group == '7_8' and self.group_7_8 > 0:
-            self.group_7_8 -= 1
-        elif group == '9_10' and self.group_9_10 > 0:
-            self.group_9_10 -= 1
+        self._adjust_group_counter(progress, -1)
+        self.save()
 
+    def update_word(self, old_progress, new_progress):
+        """
+        Обновляет статистику при изменении прогресса слова.
+        Всегда пересчитывает общий прогресс и обновляет счетчики групп.
+
+        :param old_progress: Предыдущее значение прогресса слова.
+        :param new_progress: Новое значение прогресса слова.
+        """
+        # Корректируем суммарный прогресс
+        self.total_progress = self.total_progress - old_progress + new_progress
+
+        # Всегда обновляем счетчики групп: сначала уменьшаем для старого значения, затем увеличиваем для нового
+        self._adjust_group_counter(old_progress, -1)
+        self._adjust_group_counter(new_progress, 1)
+
+        # Пересчитываем общий прогресс
+        self.overall_progress = self._compute_overall_progress()
         self.save()
