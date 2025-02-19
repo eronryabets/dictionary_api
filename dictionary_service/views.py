@@ -90,14 +90,22 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         """
         Возвращает статистику прогресса для выбранного словаря.
         URL: /dictionaries/<id>/progress/
+        Выполняет ОДИН SQL-запрос, исключая ненужные предзагрузки связанных объектов.
         """
-        dictionary = self.get_object()
-        try:
-            progress_instance = dictionary.progress
-        except DictionaryProgress.DoesNotExist:
+        progress_data = DictionaryProgress.objects.filter(dictionary_id=pk).values(
+            'total_progress',
+            'overall_progress',
+            'group_0_2',
+            'group_3_4',
+            'group_5_6',
+            'group_7_8',
+            'group_9_10'
+        ).first()
+
+        if not progress_data:
             return Response({"detail": "Dictionary progress not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = DictionaryProgressSerializer(progress_instance)
-        return Response(serializer.data)
+
+        return Response(progress_data)
 
 
 class WordViewSet(viewsets.ModelViewSet):
