@@ -93,6 +93,7 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         Выполняет ОДИН SQL-запрос, исключая ненужные предзагрузки связанных объектов.
         """
         progress_data = DictionaryProgress.objects.filter(dictionary_id=pk).values(
+            'dictionary_id',
             'total_progress',
             'overall_progress',
             'group_0_2',
