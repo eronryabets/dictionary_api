@@ -109,6 +109,38 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         return Response(progress_data)
 
 
+class BulkDictionaryProgressView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        *.space/dictionary_progress/bulk/
+        Принимает JSON вида:
+        {
+          "dictionary_ids": ["id1", "id2", ...]
+        }
+        Возвращает массив с данными прогресса для каждого словаря.
+        """
+        dictionary_ids = request.data.get("dictionary_ids", [])
+        if not dictionary_ids or not isinstance(dictionary_ids, list):
+            return Response(
+                {"detail": "dictionary_ids must be a non-empty list"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        progress_data = DictionaryProgress.objects.filter(dictionary_id__in=dictionary_ids).values(
+            'dictionary_id',
+            'total_progress',
+            'overall_progress',
+            'group_0_2',
+            'group_3_4',
+            'group_5_6',
+            'group_7_8',
+            'group_9_10'
+        )
+        return Response(list(progress_data), status=status.HTTP_200_OK)
+
+
 class WordViewSet(viewsets.ModelViewSet):
     """
     ViewSet для работы со словами (Word).
