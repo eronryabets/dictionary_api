@@ -114,7 +114,7 @@ class BulkDictionaryProgressView(APIView):
 
     def post(self, request, *args, **kwargs):
         """
-        *.space/dictionary_progress/bulk/
+        *.space/dictionaries/progress/bulk/
         Принимает JSON вида:
         {
           "dictionary_ids": ["id1", "id2", ...]

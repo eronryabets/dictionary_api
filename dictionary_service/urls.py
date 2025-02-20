@@ -9,6 +9,6 @@ router.register(r'tags', TagViewSet, basename='tag')
 
 urlpatterns = [
     path('words/bulk_action/', BulkWordActionView.as_view(), name='bulk_action'),
-    path('dictionary_progress/bulk/', BulkDictionaryProgressView.as_view(), name='bulk_dictionary_progress'),
+    path('dictionaries/progress/bulk/', BulkDictionaryProgressView.as_view(), name='bulk_dictionary_progress'),
     path('', include(router.urls)),
 ]
