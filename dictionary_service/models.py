@@ -273,8 +273,10 @@ class DictionaryProgress(models.Model):
     )
     # Суммарный прогресс всех слов (на шкале от 0 до 10)
     total_progress = models.FloatField(default=0.0, help_text="Суммарный прогресс всех слов (0–10)")
-    # Общий прогресс словаря в процентах (вычисляется как (total_progress/word_count)*10)
+    # Общий прогресс словаря в процентах (вычисляется как (total_progress / word_count) * 10)
     overall_progress = models.FloatField(default=0.0, help_text="Общий прогресс словаря в %")
+    # Новый столбец: максимальный возможный прогресс, равен количеству слов * 10
+    max_progress = models.FloatField(default=0.0, help_text="Максимальный возможный прогресс (word_count * 10)")
     # Группы слов по диапазонам прогресса
     group_0_2 = models.PositiveIntegerField(default=0, help_text="Слова с прогрессом 0–2")
     group_3_4 = models.PositiveIntegerField(default=0, help_text="Слова с прогрессом 3–4")
@@ -305,13 +307,12 @@ class DictionaryProgress(models.Model):
 
     def _compute_overall_progress(self):
         """
-        Вычисляет общий прогресс словаря в процентах на основе total_progress и количества слов.
-        Если word_count равен 0, возвращает 0.
+        Вычисляет общий прогресс словаря в процентах на основе total_progress и max_progress.
+        Если max_progress равен 0, возвращает 0.
         """
-        total_words = self.dictionary.word_count
-        if total_words <= 0:
+        if self.max_progress <= 0:
             return 0
-        return round((self.total_progress / total_words) * 10)
+        return round((self.total_progress / self.max_progress) * 100)
 
     def _adjust_group_counter(self, progress, delta):
         """
@@ -346,6 +347,9 @@ class DictionaryProgress(models.Model):
         # Обновляем счетчик группы для нового слова
         self._adjust_group_counter(progress, 1)
 
+        # Обновляем максимальный возможный прогресс (+10 для нового слова)
+        self.max_progress += 10
+
         # Пересчитываем общий прогресс: (total_progress / новое число слов) * 10
         self.overall_progress = round((self.total_progress / new_total_words) * 10)
         self.save()
@@ -354,14 +358,13 @@ class DictionaryProgress(models.Model):
         """
         Обновляет статистику словаря при удалении слова.
         Вычитает значение прогресса удаляемого слова из total_progress,
-        пересчитывает overall_progress и уменьшает счетчик соответствующей группы.
+        пересчитывает overall_progress, уменьшает счетчик соответствующей группы,
+        и уменьшает max_progress на 10.
         При этом учитывается, что на момент вызова значение dictionary.word_count ещё не обновлено,
         поэтому для расчёта нового количества слов используем (dictionary.word_count - 1).
         """
         self.total_progress -= progress
 
-        # Предполагаем, что на момент вызова remove_word word_count ещё не обновлён,
-        # поэтому фактическое число оставшихся слов будет:
         new_total_words = self.dictionary.word_count - 1
 
         if new_total_words > 0:
@@ -371,6 +374,10 @@ class DictionaryProgress(models.Model):
             self.total_progress = 0
 
         self._adjust_group_counter(progress, -1)
+
+        # Уменьшаем максимальный возможный прогресс на 10
+        self.max_progress -= 10
+
         self.save()
 
     def update_word(self, old_progress, new_progress):
