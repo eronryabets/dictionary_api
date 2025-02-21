@@ -308,7 +308,7 @@ class DictionaryProgress(models.Model):
     def _compute_overall_progress(self):
         """
         Вычисляет общий прогресс словаря в процентах на основе total_progress и max_progress.
-        Если max_progress равен 0, возвращает 0.
+        Если max_progress < 0, возвращает 0.
         """
         if self.max_progress <= 0:
             return 0

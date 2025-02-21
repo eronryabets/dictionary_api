@@ -94,6 +94,7 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         """
         progress_data = DictionaryProgress.objects.filter(dictionary_id=pk).values(
             'dictionary_id',
+            'max_progress',
             'total_progress',
             'overall_progress',
             'group_0_2',
@@ -130,6 +131,7 @@ class BulkDictionaryProgressView(APIView):
 
         progress_data = DictionaryProgress.objects.filter(dictionary_id__in=dictionary_ids).values(
             'dictionary_id',
+            'max_progress',
             'total_progress',
             'overall_progress',
             'group_0_2',
