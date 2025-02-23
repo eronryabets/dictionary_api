@@ -308,11 +308,12 @@ class DictionaryProgress(models.Model):
     def _compute_overall_progress(self):
         """
         Вычисляет общий прогресс словаря в процентах на основе total_progress и max_progress.
-        Если max_progress < 0, возвращает 0.
+        Если max_progress <= 0, возвращает 0.
+        Результат округляется до трех знаков после запятой.
         """
         if self.max_progress <= 0:
             return 0
-        return round((self.total_progress / self.max_progress) * 100)
+        return round((self.total_progress / self.max_progress) * 100, 3)
 
     def _adjust_group_counter(self, progress, delta):
         """
