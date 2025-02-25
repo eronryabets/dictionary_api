@@ -5,8 +5,6 @@ import os
 from django.core.exceptions import ValidationError
 from PIL import Image
 
-from dictionary_service.utils.progress_utils import calculate_overall_progress
-
 
 def validate_image_extension(value):
     """
@@ -315,7 +313,7 @@ class DictionaryProgress(models.Model):
         """
         if self.max_progress <= 0:
             return 0
-        return calculate_overall_progress(self.total_progress, self.max_progress)
+        return round((self.total_progress / self.max_progress) * 100, 3)
 
     def _adjust_group_counter(self, progress, delta):
         """
@@ -353,34 +351,29 @@ class DictionaryProgress(models.Model):
         # Обновляем максимальный возможный прогресс (+10 для нового слова)
         self.max_progress += 10
 
-        # Пересчитываем общий прогресс: (total_progress / новое число слов) * 10
-        self.overall_progress = calculate_overall_progress(self.total_progress, self.max_progress)
+        # Пересчитываем общий прогресс, используя max_progress
+        self.overall_progress = self._compute_overall_progress()
         self.save()
 
     def remove_word(self, progress):
         """
         Обновляет статистику словаря при удалении слова.
         Вычитает значение прогресса удаляемого слова из total_progress,
-        пересчитывает overall_progress, уменьшает счетчик соответствующей группы,
-        и уменьшает max_progress на 10.
+        уменьшает счетчик соответствующей группы, уменьшает max_progress на 10 и пересчитывает общий прогресс.
         При этом учитывается, что на момент вызова значение dictionary.word_count ещё не обновлено,
-        поэтому для расчёта нового количества слов используем (dictionary.word_count - 1).
+        поэтому фактическое число оставшихся слов определяется через max_progress.
         """
         self.total_progress -= progress
-
-        new_total_words = self.dictionary.word_count - 1
-
-        if new_total_words > 0:
-            self.overall_progress = calculate_overall_progress(self.total_progress, self.max_progress)
-        else:
+        # Уменьшаем счетчик группы для удаляемого слова:
+        self._adjust_group_counter(progress, -1)
+        # Уменьшаем максимальный возможный прогресс на 10:
+        self.max_progress -= 10
+        # Если max_progress стал 0 или меньше, сбрасываем total_progress и overall_progress:
+        if self.max_progress <= 0:
             self.overall_progress = 0
             self.total_progress = 0
-
-        self._adjust_group_counter(progress, -1)
-
-        # Уменьшаем максимальный возможный прогресс на 10
-        self.max_progress -= 10
-
+        else:
+            self.overall_progress = self._compute_overall_progress()
         self.save()
 
     def update_word(self, old_progress, new_progress):
@@ -391,13 +384,11 @@ class DictionaryProgress(models.Model):
         :param old_progress: Предыдущее значение прогресса слова.
         :param new_progress: Новое значение прогресса слова.
         """
-        # Корректируем суммарный прогресс
+        # Корректируем суммарный прогресс:
         self.total_progress = self.total_progress - old_progress + new_progress
-
-        # Всегда обновляем счетчики групп: сначала уменьшаем для старого значения, затем увеличиваем для нового
+        # Обновляем счетчики групп: уменьшаем для старого значения, затем увеличиваем для нового:
         self._adjust_group_counter(old_progress, -1)
         self._adjust_group_counter(new_progress, 1)
-
-        # Пересчитываем общий прогресс
+        # Пересчитываем общий прогресс:
         self.overall_progress = self._compute_overall_progress()
         self.save()
