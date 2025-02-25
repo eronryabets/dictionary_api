@@ -4,7 +4,7 @@ import uuid
 import os
 from django.core.exceptions import ValidationError
 from PIL import Image
-
+from .progress_utils import calculate_overall_progress
 
 def validate_image_extension(value):
     """
@@ -313,7 +313,7 @@ class DictionaryProgress(models.Model):
         """
         if self.max_progress <= 0:
             return 0
-        return round((self.total_progress / self.max_progress) * 100, 3)
+        return calculate_overall_progress(self.total_progress, self.max_progress)
 
     def _adjust_group_counter(self, progress, delta):
         """
@@ -352,7 +352,7 @@ class DictionaryProgress(models.Model):
         self.max_progress += 10
 
         # Пересчитываем общий прогресс: (total_progress / новое число слов) * 10
-        self.overall_progress = round((self.total_progress / new_total_words) * 10)
+        self.overall_progress = calculate_overall_progress(self.total_progress, self.max_progress)
         self.save()
 
     def remove_word(self, progress):
@@ -369,7 +369,7 @@ class DictionaryProgress(models.Model):
         new_total_words = self.dictionary.word_count - 1
 
         if new_total_words > 0:
-            self.overall_progress = round((self.total_progress / new_total_words) * 10)
+            self.overall_progress = calculate_overall_progress(self.total_progress, self.max_progress)
         else:
             self.overall_progress = 0
             self.total_progress = 0
