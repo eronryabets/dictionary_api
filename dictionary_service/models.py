@@ -4,7 +4,9 @@ import uuid
 import os
 from django.core.exceptions import ValidationError
 from PIL import Image
-from .progress_utils import calculate_overall_progress
+
+from dictionary_service.utils.progress_utils import calculate_overall_progress
+
 
 def validate_image_extension(value):
     """
