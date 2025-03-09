@@ -63,6 +63,40 @@ class DictionaryViewSet(viewsets.ModelViewSet):
         """
         serializer.save(user_id=self.request.user.id)
 
+    def update(self, request, *args, **kwargs):
+        """
+        Обновляет существующий словарь с помощью частичного или полного обновления.
+
+        Этот метод предназначен для обновления данных словаря, принадлежащего текущему пользователю.
+        Основные шаги метода:
+          1. Извлекает параметр 'partial' из kwargs, чтобы определить, выполнять ли частичное обновление.
+          2. Получает объект словаря напрямую (без prefetch_related) с использованием ID из URL и проверяет,
+             что словарь принадлежит аутентифицированному пользователю.
+          3. Инициализирует сериализатор с извлеченным объектом и входными данными из запроса.
+          4. Валидирует данные с помощью serializer.is_valid(raise_exception=True).
+          5. Обновляет словарь в базе данных с помощью метода update() для непосредственного применения изменений.
+          6. Возвращает Response с сообщением об успешном обновлении и HTTP статусом 200.
+
+        Параметры:
+          request (HttpRequest): HTTP-запрос, содержащий данные обновления.
+          *args: Дополнительные позиционные аргументы.
+          **kwargs: Дополнительные именованные аргументы, включая 'partial' (True для частичного обновления).
+
+        Возвращает:
+          Response: Объект ответа с JSON-данными, например, {"detail": "Dictionary updated successfully."} и статусом 200.
+
+        Исключения:
+          Если данные не проходят валидацию, будет выброшено исключение, и клиент получит сообщение об ошибке.
+        """
+        partial = kwargs.pop('partial', False)
+        # Получаем объект напрямую без prefetch_related:
+        instance = Dictionary.objects.get(pk=kwargs['pk'], user_id=request.user.id)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        Dictionary.objects.filter(pk=instance.pk).update(**serializer.validated_data)
+        # return Response(serializer.data) //Облегчили ответ - состояние локально обновляем на фронте при успехе.
+        return Response({"detail": "Dictionary updated successfully."}, status=status.HTTP_200_OK)
+
     # Устанавливаем пагинацию только для списка словарей
     pagination_class = DictionaryPagination
 
