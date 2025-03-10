@@ -245,67 +245,48 @@ class Word(models.Model):
 
     def delete(self, *args, **kwargs):
         """
-         Удаляет слово и обновляет связанные статистические данные словаря и прогресса.
-
-         Метод переопределяет стандартное удаление объекта (слова) таким образом, чтобы при удалении
-         происходило обновление связанных данных:
-
-         1. Обновление прогресса:
-            - Получается значение прогресса для текущего слова через self.userword.progress.
-              Если значение недоступно (например, возникает исключение), используется значение 0.0.
-            - Выполняется атомарная транзакция (transaction.atomic()), чтобы обеспечить целостность данных.
-            - В таблице DictionaryProgress для словаря, к которому принадлежит слово (self.dictionary),
-              происходит уменьшение общего прогресса (total_progress) на значение progress_value.
-              Одновременно, максимальный прогресс (max_progress) уменьшается на фиксированное значение 10.
-
-         2. Пересчет общего прогресса:
-            - Получается объект DictionaryProgress для текущего словаря.
-            - Если максимальный прогресс (max_progress) больше 0, вычисляется новый общий прогресс
-              (overall_progress) как отношение total_progress к max_progress, умноженное на 100 и округленное до
-              3 знаков после запятой.
-            - Если max_progress равен 0, новый общий прогресс устанавливается равным 0.
-            - Обновляется поле overall_progress в DictionaryProgress для текущего словаря.
-
-         3. Обновление счетчика слов:
-            - В объекте Dictionary обновляется количество слов (word_count) путем уменьшения его на 1.
-            - Также обновляется поле updated_at текущим временем (timezone.now()).
-
-         4. Само удаление слова:
-            - После обновления статистики вызывается родительский метод delete, который выполняет фактическое
-            удаление объекта.
-
-         Использование transaction.atomic() гарантирует, что все изменения в базе данных произойдут атомарно,
-         то есть либо все обновления будут применены, либо ни одно из них не будет, если возникнет ошибка.
-         """
+        Удаляет слово и обновляет связанные статистические данные:
+          - Уменьшает total_progress на значение прогресса слова.
+          - Уменьшает max_progress на 10 (так как каждое слово вносит +10 в max_progress).
+          - Уменьшает соответствующий счётчик группы (например, group_0_2) на 1.
+          - Пересчитывает overall_progress.
+          - Уменьшает word_count в связанном Dictionary на 1.
+        Все обновления выполняются в атомарной транзакции.
+        """
+        from django.db import transaction
         with transaction.atomic():
-            # Получаем значение прогресса слова до удаления.
+            # Получаем значение прогресса удаляемого слова (из связанной модели UserWord)
             try:
                 progress_value = self.userword.progress
             except Exception:
                 progress_value = 0.0
 
-            # Обновляем статистику в DictionaryProgress:
+            # Обновляем DictionaryProgress: уменьшаем total_progress и max_progress через F() выражения
             DictionaryProgress.objects.filter(dictionary=self.dictionary).update(
                 total_progress=F('total_progress') - progress_value,
                 max_progress=F('max_progress') - 10
             )
-            # Пересчитываем overall_progress для DictionaryProgress.
+
+            # Получаем объект DictionaryProgress (обновлённый в БД)
             dp = self.dictionary.progress
+            # Обновляем счётчик группы для удаляемого слова
+            dp._adjust_group_counter(progress_value, -1)
+            # Пересчитываем overall_progress на основе обновлённых total_progress и max_progress
             if dp.max_progress > 0:
                 new_overall = round((dp.total_progress / dp.max_progress) * 100, 3)
             else:
                 new_overall = 0
-            DictionaryProgress.objects.filter(dictionary=self.dictionary).update(
-                overall_progress=new_overall
-            )
+                dp.total_progress = 0
+            dp.overall_progress = new_overall
+            dp.save()
 
-            # Обновляем счетчик слов в Dictionary:
+            # Обновляем word_count в связанном Dictionary
             Dictionary.objects.filter(pk=self.dictionary.id).update(
                 word_count=F('word_count') - 1,
                 updated_at=timezone.now()
             )
 
-            # Теперь выполняем само удаление слова.
+            # Вызываем стандартное удаление слова
             super().delete(*args, **kwargs)
 
     def __str__(self):
