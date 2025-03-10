@@ -1,9 +1,11 @@
 
-from django.db import models
+from django.db import models, transaction
 import uuid
 import os
 from django.core.exceptions import ValidationError
 from PIL import Image
+from django.db.models import F
+from django.utils import timezone
 
 
 def validate_image_extension(value):
@@ -213,6 +215,71 @@ class Word(models.Model):
             except Exception as e:
                 # Логирование или обработка ошибки
                 print(f"Error processing image: {e}")
+
+    def delete(self, *args, **kwargs):
+        """
+         Удаляет слово и обновляет связанные статистические данные словаря и прогресса.
+
+         Метод переопределяет стандартное удаление объекта (слова) таким образом, чтобы при удалении
+         происходило обновление связанных данных:
+
+         1. Обновление прогресса:
+            - Получается значение прогресса для текущего слова через self.userword.progress.
+              Если значение недоступно (например, возникает исключение), используется значение 0.0.
+            - Выполняется атомарная транзакция (transaction.atomic()), чтобы обеспечить целостность данных.
+            - В таблице DictionaryProgress для словаря, к которому принадлежит слово (self.dictionary),
+              происходит уменьшение общего прогресса (total_progress) на значение progress_value.
+              Одновременно, максимальный прогресс (max_progress) уменьшается на фиксированное значение 10.
+
+         2. Пересчет общего прогресса:
+            - Получается объект DictionaryProgress для текущего словаря.
+            - Если максимальный прогресс (max_progress) больше 0, вычисляется новый общий прогресс
+              (overall_progress) как отношение total_progress к max_progress, умноженное на 100 и округленное до
+              3 знаков после запятой.
+            - Если max_progress равен 0, новый общий прогресс устанавливается равным 0.
+            - Обновляется поле overall_progress в DictionaryProgress для текущего словаря.
+
+         3. Обновление счетчика слов:
+            - В объекте Dictionary обновляется количество слов (word_count) путем уменьшения его на 1.
+            - Также обновляется поле updated_at текущим временем (timezone.now()).
+
+         4. Само удаление слова:
+            - После обновления статистики вызывается родительский метод delete, который выполняет фактическое
+            удаление объекта.
+
+         Использование transaction.atomic() гарантирует, что все изменения в базе данных произойдут атомарно,
+         то есть либо все обновления будут применены, либо ни одно из них не будет, если возникнет ошибка.
+         """
+        with transaction.atomic():
+            # Получаем значение прогресса слова до удаления.
+            try:
+                progress_value = self.userword.progress
+            except Exception:
+                progress_value = 0.0
+
+            # Обновляем статистику в DictionaryProgress:
+            DictionaryProgress.objects.filter(dictionary=self.dictionary).update(
+                total_progress=F('total_progress') - progress_value,
+                max_progress=F('max_progress') - 10
+            )
+            # Пересчитываем overall_progress для DictionaryProgress.
+            dp = self.dictionary.progress
+            if dp.max_progress > 0:
+                new_overall = round((dp.total_progress / dp.max_progress) * 100, 3)
+            else:
+                new_overall = 0
+            DictionaryProgress.objects.filter(dictionary=self.dictionary).update(
+                overall_progress=new_overall
+            )
+
+            # Обновляем счетчик слов в Dictionary:
+            Dictionary.objects.filter(pk=self.dictionary.id).update(
+                word_count=F('word_count') - 1,
+                updated_at=timezone.now()
+            )
+
+            # Теперь выполняем само удаление слова.
+            super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.word

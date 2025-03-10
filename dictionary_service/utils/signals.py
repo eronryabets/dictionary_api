@@ -95,56 +95,56 @@ def increment_word_count(sender, instance, created, **kwargs):
             f"Word added to Dictionary {instance.dictionary.id}. Incremented word_count and updated updated_at.")
 
 
-@receiver(post_delete, sender=Word)
-def decrement_word_count(sender, instance, **kwargs):
-    """
-    Уменьшает счетчик слов в Dictionary при удалении Word.
-
-    При удалении Word счетчик word_count в связанном Dictionary уменьшается на 1,
-    поле updated_at обновляется текущим временем. Если word_count становится меньше 0,
-    он сбрасывается в 0, и генерируется предупреждение.
-    """
-    with transaction.atomic():
-        Dictionary.objects.filter(id=instance.dictionary.id).update(
-            word_count=F('word_count') - 1,
-            updated_at=timezone.now()
-        )
-        dictionary = Dictionary.objects.get(id=instance.dictionary.id)
-        if dictionary.word_count < 0:
-            dictionary.word_count = 0
-            dictionary.save()
-            logger.warning(f"word_count for Dictionary {dictionary.id} became negative. Reset to 0.")
-        else:
-            logger.info(
-                f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count and updated updated_at.")
-
-
 @receiver(post_save, sender=Dictionary)
 def create_dictionary_progress(sender, instance, created, **kwargs):
     if created:
         # При создании нового словаря создаём запись прогресса.
         DictionaryProgress.objects.create(dictionary=instance)
 
+# Переписал сам метод Делит во Вьюхе, что бы не использовать нижний код. (сократил на 1 запрос с БД)
+# @receiver(post_delete, sender=Word)
+# def decrement_word_count(sender, instance, **kwargs):
+#     """
+#     Уменьшает счетчик слов в Dictionary при удалении Word.
+#
+#     При удалении Word счетчик word_count в связанном Dictionary уменьшается на 1,
+#     поле updated_at обновляется текущим временем. Если word_count становится меньше 0,
+#     он сбрасывается в 0, и генерируется предупреждение.
+#     """
+#     with transaction.atomic():
+#         Dictionary.objects.filter(id=instance.dictionary.id).update(
+#             word_count=F('word_count') - 1,
+#             updated_at=timezone.now()
+#         )
+#         dictionary = Dictionary.objects.get(id=instance.dictionary.id)
+#         if dictionary.word_count < 0:
+#             dictionary.word_count = 0
+#             dictionary.save()
+#             logger.warning(f"word_count for Dictionary {dictionary.id} became negative. Reset to 0.")
+#         else:
+#             logger.info(
+#                 f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count and updated updated_at.")
 
-@receiver(pre_delete, sender=Word)
-def store_word_progress_before_deletion(sender, instance, **kwargs):
-    """
-    Сохраняет значение прогресса слова перед его удалением.
-    Это нужно, так как связанная запись UserWord удаляется каскадом.
-    """
-    try:
-        instance._progress_for_deletion = instance.userword.progress
-    except Exception:
-        instance._progress_for_deletion = 0.0
 
-
-@receiver(post_delete, sender=Word)
-def update_dictionary_progress_on_word_deletion(sender, instance, **kwargs):
-    """
-    Обновляет статистику словаря при удалении слова.
-    Вычитает значение прогресса удаляемого слова из DictionaryProgress.
-    """
-    progress = getattr(instance, '_progress_for_deletion', 0.0)
-    dictionary = instance.dictionary
-    if hasattr(dictionary, 'progress'):
-        dictionary.progress.remove_word(progress)
+# @receiver(pre_delete, sender=Word)
+# def store_word_progress_before_deletion(sender, instance, **kwargs):
+#     """
+#     Сохраняет значение прогресса слова перед его удалением.
+#     Это нужно, так как связанная запись UserWord удаляется каскадом.
+#     """
+#     try:
+#         instance._progress_for_deletion = instance.userword.progress
+#     except Exception:
+#         instance._progress_for_deletion = 0.0
+#
+#
+# @receiver(post_delete, sender=Word)
+# def update_dictionary_progress_on_word_deletion(sender, instance, **kwargs):
+#     """
+#     Обновляет статистику словаря при удалении слова.
+#     Вычитает значение прогресса удаляемого слова из DictionaryProgress.
+#     """
+#     progress = getattr(instance, '_progress_for_deletion', 0.0)
+#     dictionary = instance.dictionary
+#     if hasattr(dictionary, 'progress'):
+#         dictionary.progress.remove_word(progress)
