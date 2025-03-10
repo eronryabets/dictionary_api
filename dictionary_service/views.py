@@ -239,89 +239,139 @@ class TagViewSet(viewsets.ModelViewSet):
 
 class BulkWordActionView(APIView):
     """
-    APIView для массовых действий со словами.
+    View для выполнения массовых операций над словами.
 
-    Поддерживает следующие действия:
-      - "delete": Массовое удаление слов.
-      - "disable_highlight": Выключает подсветку для выбранных слов.
-      - "enable_highlight": Включает подсветку для выбранных слов.
+    Данный View обрабатывает POST-запросы для выполнения bulk-действий над списком слов,
+    передаваемых в запросе. Поддерживаются следующие действия:
+
+    1. delete: массовое удаление слов.
+       - Проверяется, что все слова принадлежат одному словарю.
+       - Агрегируются статистические данные, такие как количество удаляемых слов, сумма их прогресса
+         и количество удаляемых слов в каждой из групп прогресса.
+       - Обновляются связанные статистики в модели DictionaryProgress и счетчик слов в модели Dictionary.
+       - Пересчитывается общее значение overall_progress.
+       - Выполняется массовое удаление слов.
+
+    2. disable_highlight: массовое отключение подсветки для выбранных слов.
+       - Обновляются записи в модели UserWord, устанавливая флаг highlight_disabled в True.
+
+    3. enable_highlight: массовое включение подсветки для выбранных слов.
+       - Обновляются записи в модели UserWord, устанавливая флаг highlight_disabled в False.
+
+    Если действие не распознано, возвращается ошибка с соответствующим сообщением.
+
+    Доступ к данному View разрешён только аутентифицированным пользователям.
     """
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        """
+               Обрабатывает POST-запрос для выполнения массовых действий над словами.
+
+               Ожидаемые данные в теле запроса:
+                 - "action": строка, определяющая тип операции (delete, disable_highlight, enable_highlight).
+                 - "word_ids": список идентификаторов слов, над которыми требуется выполнить операцию.
+
+               Валидация:
+                 - Если word_ids отсутствует или не является непустым списком, возвращается ответ с кодом 400.
+
+               Действия:
+                 - Если action == "delete":
+                     1. Выполняется атомарная транзакция для обеспечения целостности данных.
+                     2. Получаются объекты Word, связанные с указанными идентификаторами, с предзагрузкой
+                     связанных объектов (dictionary, userword).
+                     3. Проверяется, что все слова принадлежат одному словарю. Если нет, возвращается ошибка.
+                     4. Агрегируются статистические данные:
+                        - Количество удаляемых слов (delete_count).
+                        - Суммарное значение их прогресса (progress_sum).
+                        - Количество удаляемых слов в каждой группе прогресса (groups_deleted).
+                     5. Обновляется:
+                        - Счетчик слов (word_count) в модели Dictionary.
+                        - Статистика прогресса в модели DictionaryProgress (total_progress, max_progress,
+                        значения для каждой группы).
+                     6. Пересчитывается значение overall_progress для DictionaryProgress.
+                     7. Выполняется массовое удаление слов.
+                     8. Возвращается ответ с сообщением об успешном удалении и кодом 200.
+
+                 - Если action == "disable_highlight":
+                     Обновляется модель UserWord, устанавливая highlight_disabled в True для выбранных слов.
+
+                 - Если action == "enable_highlight":
+                     Обновляется модель UserWord, устанавливая highlight_disabled в False для выбранных слов.
+
+                 - Для неизвестных значений action возвращается ответ с кодом 400 и сообщением об ошибке.
+
+               Возвращаемый результат:
+                 - Response с соответствующим сообщением и HTTP-статусом (200 для успешных операций, 400 для ошибок).
+               """
         action = request.data.get("action")
         word_ids = request.data.get("word_ids", [])
 
         if not word_ids or not isinstance(word_ids, list):
-            return Response({"detail": "word_ids must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "word_ids must be a non-empty list"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if action == "delete":
             with transaction.atomic():
-                # Получаем QuerySet слов для удаления с нужными связями.
-                words_qs = (
-                    Word.objects.filter(pk__in=word_ids)
-                    .select_related('dictionary', 'userword')
-                )
+                # Получаем слова для удаления вместе с их словарями и userword
+                words_qs = Word.objects.filter(pk__in=word_ids).select_related('dictionary', 'userword')
 
-                # Группируем слова по словарям.
-                # Для каждого словаря накапливаем:
-                # - delete_count: общее число удаляемых слов,
-                # - progress_sum: сумма прогресса этих слов,
-                # - groups: для каждой группы – количество удаляемых слов.
-                updates = defaultdict(lambda: {"delete_count": 0, "progress_sum": 0.0, "groups": defaultdict(int)})
+                # Гарантируем, что все слова принадлежат одному словарю
+                dict_ids = {word.dictionary_id for word in words_qs}
+                if len(dict_ids) != 1:
+                    return Response({"detail": "All words must belong to the same dictionary."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                dict_id = dict_ids.pop()
+
+                # Агрегируем изменения: для данного словаря считаем количество удаляемых слов,
+                # сумму их прогресса и для каждой группы – количество удаляемых слов.
+                delete_count = 0
+                progress_sum = 0.0
+                groups_deleted = defaultdict(int)
+                # Предполагаем, что для данного словаря уже создан объект DictionaryProgress
+                dp_temp = DictionaryProgress.objects.get(dictionary_id=dict_id)
                 for word in words_qs:
-                    dict_id = word.dictionary_id
-                    updates[dict_id]["delete_count"] += 1
+                    delete_count += 1
                     try:
                         p = word.userword.progress
                     except Exception:
                         p = 0.0
-                    updates[dict_id]["progress_sum"] += p
-                    # Определяем группу слова с помощью метода _get_group из DictionaryProgress.
-                    # Для этого получаем текущий объект DictionaryProgress (предполагается, что он уже создан)
-                    dp = word.dictionary.progress
-                    group = dp._get_group(p)
+                    progress_sum += p
+                    group = dp_temp._get_group(p)
                     if group:
-                        updates[dict_id]["groups"][group] += 1
+                        groups_deleted[group] += 1
 
-                # Для каждого словаря обновляем статистику.
-                for dict_id, data in updates.items():
-                    delete_count = data["delete_count"]
-                    progress_sum = data["progress_sum"]
-                    groups_deleted = data["groups"]
+                # Обновляем word_count в Dictionary одним UPDATE-запросом
+                Dictionary.objects.filter(pk=dict_id).update(
+                    word_count=F('word_count') - delete_count,
+                    updated_at=timezone.now()
+                )
 
-                    # Обновляем word_count в Dictionary.
-                    Dictionary.objects.filter(pk=dict_id).update(
-                        word_count=F('word_count') - delete_count,
-                        updated_at=timezone.now()
-                    )
+                # Обновляем DictionaryProgress с использованием F-выражений
+                DictionaryProgress.objects.filter(dictionary_id=dict_id).update(
+                    total_progress=F('total_progress') - progress_sum,
+                    max_progress=F('max_progress') - (delete_count * 10),
+                    group_0_2=F('group_0_2') - groups_deleted.get('0_2', 0),
+                    group_3_4=F('group_3_4') - groups_deleted.get('3_4', 0),
+                    group_5_6=F('group_5_6') - groups_deleted.get('5_6', 0),
+                    group_7_8=F('group_7_8') - groups_deleted.get('7_8', 0),
+                    group_9_10=F('group_9_10') - groups_deleted.get('9_10', 0)
+                )
 
-                    # Получаем текущий объект DictionaryProgress.
-                    dp = DictionaryProgress.objects.get(dictionary_id=dict_id)
-                    # Обновляем total_progress и max_progress.
-                    new_total = dp.total_progress - progress_sum
-                    new_max = dp.max_progress - (delete_count * 10)
-                    # Обновляем групповые счетчики: вычитаем количество удаленных слов для каждой группы.
-                    # Например, для группы "0_2":
-                    dp.group_0_2 = max(0, dp.group_0_2 - groups_deleted.get('0_2', 0))
-                    dp.group_3_4 = max(0, dp.group_3_4 - groups_deleted.get('3_4', 0))
-                    dp.group_5_6 = max(0, dp.group_5_6 - groups_deleted.get('5_6', 0))
-                    dp.group_7_8 = max(0, dp.group_7_8 - groups_deleted.get('7_8', 0))
-                    dp.group_9_10 = max(0, dp.group_9_10 - groups_deleted.get('9_10', 0))
+                # Теперь получаем обновлённый объект DictionaryProgress для расчёта overall_progress
+                dp = DictionaryProgress.objects.get(dictionary_id=dict_id)
+                if dp.max_progress > 0:
+                    new_overall = round((dp.total_progress / dp.max_progress) * 100, 3)
+                else:
+                    new_overall = 0
+                    dp.total_progress = 0
+                DictionaryProgress.objects.filter(dictionary_id=dict_id).update(
+                    overall_progress=new_overall
+                )
 
-                    # Пересчитываем overall_progress
-                    if new_max > 0:
-                        new_overall = round((new_total / new_max) * 100, 3)
-                    else:
-                        new_overall = 0
-                        new_total = 0
-
-                    # Сохраняем обновления.
-                    dp.total_progress = new_total
-                    dp.max_progress = new_max
-                    dp.overall_progress = new_overall
-                    dp.save()
-
-                # Теперь выполняем массовое удаление слов.
+                # Выполняем массовое удаление слов
                 Word.objects.filter(pk__in=word_ids).delete()
 
             return Response({"detail": f"Deleted {len(word_ids)} words."}, status=status.HTTP_200_OK)
