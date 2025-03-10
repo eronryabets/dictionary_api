@@ -76,32 +76,33 @@ def delete_word_image_on_delete(sender, instance, **kwargs):
         os.remove(instance.image_path.path)
 
 
-# Новые сигналы для обновления word_count
-@receiver(post_save, sender=Word)
-def increment_word_count(sender, instance, created, **kwargs):
-    """
-    Увеличивает счетчик слов в Dictionary при добавлении нового Word.
-
-    Если Word создается впервые, счетчик word_count в связанном Dictionary увеличивается на 1,
-    а поле updated_at обновляется текущим временем.
-    """
-    if created:
-        with transaction.atomic():
-            Dictionary.objects.filter(id=instance.dictionary.id).update(
-                word_count=F('word_count') + 1,
-                updated_at=timezone.now()
-            )
-        logger.info(
-            f"Word added to Dictionary {instance.dictionary.id}. Incremented word_count and updated updated_at.")
-
-
 @receiver(post_save, sender=Dictionary)
 def create_dictionary_progress(sender, instance, created, **kwargs):
     if created:
         # При создании нового словаря создаём запись прогресса.
         DictionaryProgress.objects.create(dictionary=instance)
 
-# Переписал сам метод Делит во Вьюхе, что бы не использовать нижний код. (сократил на 1 запрос с БД)
+# Переписал сам метод Делит и Сейв во Вьюхе, что бы не использовать нижний код. (сократил на 1 запрос с БД)
+
+# Новые сигналы для обновления word_count
+
+# @receiver(post_save, sender=Word)
+# def increment_word_count(sender, instance, created, **kwargs):
+#     """
+#     Увеличивает счетчик слов в Dictionary при добавлении нового Word.
+#
+#     Если Word создается впервые, счетчик word_count в связанном Dictionary увеличивается на 1,
+#     а поле updated_at обновляется текущим временем.
+#     """
+#     if created:
+#         with transaction.atomic():
+#             Dictionary.objects.filter(id=instance.dictionary.id).update(
+#                 word_count=F('word_count') + 1,
+#                 updated_at=timezone.now()
+#             )
+#         logger.info(
+#             f"Word added to Dictionary {instance.dictionary.id}. Incremented word_count and updated updated_at.")
+
 # @receiver(post_delete, sender=Word)
 # def decrement_word_count(sender, instance, **kwargs):
 #     """
@@ -124,7 +125,6 @@ def create_dictionary_progress(sender, instance, created, **kwargs):
 #         else:
 #             logger.info(
 #                 f"Word removed from Dictionary {instance.dictionary.id}. Decremented word_count and updated updated_at.")
-
 
 # @receiver(pre_delete, sender=Word)
 # def store_word_progress_before_deletion(sender, instance, **kwargs):

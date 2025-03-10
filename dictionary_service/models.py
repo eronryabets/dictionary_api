@@ -1,4 +1,3 @@
-
 from django.db import models, transaction
 import uuid
 import os
@@ -203,8 +202,31 @@ class Word(models.Model):
             raise ValidationError({'dictionary': "Word count cannot be negative."})
 
     def save(self, *args, **kwargs):
+        """
+         Переопределённый метод save модели Word для выполнения предварительной валидации,
+         последующей обработки изображения и обновления счетчика слов в связанном словаре.
+
+         Основные шаги метода:
+         1. Определяется, создаётся ли объект впервые (is_new) с помощью self._state.adding.
+         2. Вызывается метод clean() для валидации данных модели перед сохранением.
+         3. Вызывается родительский метод save() для сохранения объекта в базе данных.
+         4. Если атрибут image_path задан:
+            - Открывается изображение по пути self.image_path.path с использованием PIL.Image.
+            - Если высота или ширина изображения превышают 300 пикселей, изображение масштабируется
+              с сохранением пропорций до размеров, не превышающих 300x300 пикселей (используется метод thumbnail()).
+            - Обновлённое изображение сохраняется обратно по тому же пути.
+            - В случае возникновения исключения при обработке изображения, ошибка логируется в консоль.
+         5. Если объект создаётся впервые (is_new):
+            - Выполняется обновление поля word_count в связанном объекте Dictionary,
+              увеличивая его на 1, и обновляется поле updated_at текущим временем.
+
+         :param args: Дополнительные позиционные аргументы.
+         :param kwargs: Дополнительные именованные аргументы.
+         """
+        is_new = self._state.adding  # True, если объект создаётся впервые
         self.clean()
         super(Word, self).save(*args, **kwargs)
+        # Обработка изображения, если оно задано:
         if self.image_path:
             try:
                 img = Image.open(self.image_path.path)
@@ -213,8 +235,13 @@ class Word(models.Model):
                     img.thumbnail(output_size)
                     img.save(self.image_path.path)
             except Exception as e:
-                # Логирование или обработка ошибки
                 print(f"Error processing image: {e}")
+        # Если объект новый, обновляем word_count в связанном словаре
+        if is_new:
+            self.dictionary.__class__.objects.filter(pk=self.dictionary.id).update(
+                word_count=F('word_count') + 1,
+                updated_at=timezone.now()
+            )
 
     def delete(self, *args, **kwargs):
         """
