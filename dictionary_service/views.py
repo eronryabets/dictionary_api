@@ -201,10 +201,11 @@ class WordViewSet(viewsets.ModelViewSet):
         Возвращает только слова, принадлежащие текущему пользователю.
         Аннотирует `count` и `progress` для возможности сортировки по этим полям.
         """
-        return Word.objects.filter(dictionary__user_id=self.request.user.id) \
-            .select_related('userword') \
-            .prefetch_related('tags') \
-            .annotate(
+        qs = Word.objects.filter(dictionary__user_id=self.request.user.id).order_by('-created_at')
+        # Для операций обновления не загружаем связанные объекты
+        if self.action not in ['update', 'partial_update']:
+            qs = qs.select_related('userword').prefetch_related('tags')
+        return qs.annotate(
             count=F('userword__count'),
             progress=F('userword__progress')
         )
